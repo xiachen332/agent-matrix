@@ -36,13 +36,14 @@ class MasterAgent:
         """获取 Agent 池"""
         return self._pool
 
-    async def execute_task(self, task_description: str) -> ExecutionReport:
+    async def execute_task(self, task_description: str, session_config=None) -> ExecutionReport:
         """执行单个任务
 
         完整流程：分解 -> 调度 -> 汇总
 
         Args:
             task_description: 任务描述
+            session_config: 会话配置（用于触发 Webhook）
 
         Returns:
             执行报告
@@ -55,6 +56,18 @@ class MasterAgent:
 
         # 3. 汇总结果
         report = self._aggregator.aggregate(completed_tasks)
+
+        # 4. 触发 Webhook
+        if session_config and session_config.webhooks:
+            webhook_payload = {
+                "task": task_description,
+                "report": {
+                    "total_tasks": report.total_tasks,
+                    "successful_tasks": report.successful_tasks,
+                    "failed_tasks": report.failed_tasks,
+                }
+            }
+            await session_config.trigger_webhooks(webhook_payload)
 
         return report
 

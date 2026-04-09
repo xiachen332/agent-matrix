@@ -11,6 +11,12 @@
 - **多模型支持**：MiniMax / OpenAI / OpenRouter / DeepSeek / SiliconFlow / Claude
 - **多会话管理**：支持持久化会话，跨任务保持上下文
 - **真干活**：Coder 写文件、Tester 生成并运行 pytest
+- **流式输出**：实时看到 LLM 打字效果
+- **Token 统计**：按会话统计消耗 credits
+- **Webhook 通知**：任务完成后主动回调
+- **项目知识库**：Agent 理解项目结构再写代码
+- **安全扫描**：自动检查代码安全漏洞
+- **后台任务**：长时间任务后台运行不阻塞
 
 ## 安装
 
@@ -56,17 +62,18 @@ agent-matrix
 进入后可用指令：
 
 ```
-/session              # 列出所有会话
+/session              # 交互式选择会话
 /session new [name]   # 新建会话
 /session <id>        # 切换会话
 /session delete <id> # 删除会话
-/context             # 查看会话元数据
+/context             # 查看会话元数据/项目上下文
 /context clear       # 清空元数据
+/project <dir>       # 关联项目目录（知识库）
 /provider openai     # 切换 LLM 提供商
 /key <api_key>       # 设置 API Key
 /model gpt-4o        # 设置模型
 /output ./src         # 设置代码输出目录
-/config              # 显示当前配置
+/config              # 显示当前配置和 Token 统计
 /quit                # 退出（自动保存会话）
 ```
 

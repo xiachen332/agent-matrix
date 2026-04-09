@@ -1,5 +1,5 @@
 """LLM 适配器模块"""
 
-from agent_matrix.llm.minimax import MiniMaxAdapter
+from agent_matrix.llm.adapter import LLMAdapter, create_adapter
 
-__all__ = ["MiniMaxAdapter"]
+__all__ = ["LLMAdapter", "create_adapter"]
