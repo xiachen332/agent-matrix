@@ -36,7 +36,12 @@ class MasterAgent:
         """获取 Agent 池"""
         return self._pool
 
-    async def execute_task(self, task_description: str, session_config=None) -> ExecutionReport:
+    async def execute_task(
+        self,
+        task_description: str,
+        session_config=None,
+        documents=None,
+    ) -> ExecutionReport:
         """执行单个任务
 
         完整流程：分解 -> 调度 -> 汇总
@@ -44,12 +49,13 @@ class MasterAgent:
         Args:
             task_description: 任务描述
             session_config: 会话配置（用于触发 Webhook）
+            documents: 文档列表，用于 LLM 分析
 
         Returns:
             执行报告
         """
         # 1. 任务分解
-        subtasks = await self._decomposer.decompose(task_description)
+        subtasks = await self._decomposer.decompose(task_description, documents=documents)
 
         # 2. 执行任务
         completed_tasks = await self._engine.execute(subtasks)

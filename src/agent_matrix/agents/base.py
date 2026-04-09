@@ -29,6 +29,7 @@ class Task:
     status: TaskStatus = TaskStatus.PENDING
     file_path: Optional[str] = None  # 目标文件路径（用于 Coder/Tester 等）
     image_urls: List[str] = field(default_factory=list)  # 图片URL列表（支持 Markdown 和纯URL）
+    document_paths: List[str] = field(default_factory=list)  # 文档路径列表（支持 .docx 和 .pdf）
 
     def __hash__(self):
         return hash(self.id)

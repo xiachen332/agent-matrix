@@ -3,7 +3,7 @@
 import json
 import re
 import uuid
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .agents.base import Task
 from .llm import create_adapter
@@ -102,31 +102,43 @@ class TaskDecomposer:
         else:
             self._llm = create_adapter(provider=provider, api_key=api_key)
 
-    async def decompose(self, task_description: str) -> List[Task]:
+    async def decompose(
+        self,
+        task_description: str,
+        documents: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Task]:
         """分解任务
 
         Args:
             task_description: 原始任务描述
+            documents: 文档列表，每个文档包含 path, content 等字段
 
         Returns:
             分解后的子任务列表
         """
         if self._llm is None or not self._llm.is_configured:
-            return self._mock_decompose(task_description)
+            return self._mock_decompose(task_description, documents)
 
         try:
-            return await self._llm_decompose(task_description)
+            return await self._llm_decompose(task_description, documents)
         except Exception as e:
             # LLM 调用失败时 fallback 到简单分解
             print(f"[Decomposer] LLM failed: {e}, using fallback")
-            return self._mock_decompose(task_description)
+            return self._mock_decompose(task_description, documents)
 
-    async def _llm_decompose(self, task_description: str) -> List[Task]:
+    async def _llm_decompose(
+        self,
+        task_description: str,
+        documents: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Task]:
         """使用 LLM 分解任务"""
         # 提取图片URL
         clean_desc, image_urls = extract_image_urls(task_description)
 
-        prompt = f"{SYSTEM_PROMPT}\n\n{USER_PROMPT.format(task=clean_desc)}"
+        # 如果有文档内容，添加到 prompt 中
+        doc_context = self._build_document_context(documents)
+
+        prompt = f"{SYSTEM_PROMPT}{doc_context}\n\n{USER_PROMPT.format(task=clean_desc)}"
 
         response, _ = await self._llm.complete(prompt, image_urls=image_urls if image_urls else None)
 
@@ -155,22 +167,43 @@ class TaskDecomposer:
                 dependencies=item.get("dependencies", []),
                 file_path=file_path,
                 image_urls=image_urls,  # 所有子任务继承相同的图片上下文
+                document_paths=[doc.get("path") for doc in (documents or [])],  # 传递文档路径
             ))
         return tasks
 
-    def _mock_decompose(self, task_description: str) -> List[Task]:
+    def _build_document_context(self, documents: Optional[List[Dict[str, Any]]]) -> str:
+        """构建文档上下文"""
+        if not documents:
+            return ""
+
+        context_parts = ["\n\n【参考文档内容】"]
+        for doc in documents:
+            path = doc.get("path", "unknown")
+            content = doc.get("content", doc.get("preview", ""))
+            context_parts.append(f"\n--- 文档: {path} ---\n{content}")
+            context_parts.append(f"--- 文档结束: {path} ---\n")
+
+        return "\n".join(context_parts)
+
+    def _mock_decompose(
+        self,
+        task_description: str,
+        documents: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Task]:
         """简单的 fallback 分解（无 LLM 时使用）"""
         # 提取图片URL
         clean_desc, image_urls = extract_image_urls(task_description)
 
         tasks = []
         task_id_prefix = str(uuid.uuid4())[:8]
+        doc_paths = [doc.get("path") for doc in (documents or [])]
 
         tasks.append(Task(
             id=f"{task_id_prefix}-analysis",
             description=f"分析任务需求：{clean_desc}",
             dependencies=[],
             image_urls=image_urls,
+            document_paths=doc_paths,
         ))
 
         if any(k in clean_desc.lower() for k in ["实现", "开发", "写", "code", "实现", "创建"]):
@@ -179,6 +212,7 @@ class TaskDecomposer:
                 description=f"编写代码：{clean_desc}",
                 dependencies=[f"{task_id_prefix}-analysis"],
                 image_urls=image_urls,
+                document_paths=doc_paths,
             ))
 
         if any(k in clean_desc.lower() for k in ["测试", "test", "验证"]):
@@ -187,6 +221,7 @@ class TaskDecomposer:
                 description=f"测试验证：{clean_desc}",
                 dependencies=[f"{task_id_prefix}-coding"],
                 image_urls=image_urls,
+                document_paths=doc_paths,
             ))
 
         if any(k in clean_desc.lower() for k in ["审查", "review", "检查"]):
@@ -195,6 +230,7 @@ class TaskDecomposer:
                 description=f"代码审查：{clean_desc}",
                 dependencies=[f"{task_id_prefix}-coding"],
                 image_urls=image_urls,
+                document_paths=doc_paths,
             ))
 
         if len(tasks) == 1:
@@ -203,6 +239,7 @@ class TaskDecomposer:
                 description=f"执行任务：{clean_desc}",
                 dependencies=[f"{task_id_prefix}-analysis"],
                 image_urls=image_urls,
+                document_paths=doc_paths,
             ))
 
         return tasks

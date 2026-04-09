@@ -99,6 +99,7 @@ async def run_interactive(
 ║    /review <file>     审查本地文件             ║
 ║    /review-pr <url>   审查 GitHub PR           ║
 ║    /security <path>    安全扫描                ║
+║    /doc <path>         追加文档到下一任务       ║
 ║    /run <task>        后台运行任务             ║
 ║    /jobs              列出后台任务             ║
 ║    /log <job_id>      查看任务日志             ║
@@ -429,6 +430,36 @@ async def run_interactive(
                     else:
                         print(f"✗ 扫描失败: {result.error}")
 
+        elif action == "/doc":
+            # 追加文档到下一任务
+            if len(parts) < 2:
+                print("用法: /doc <docx_or_pdf_path>")
+                print(f"支持格式: {get_document_service().supported_formats()}")
+            else:
+                doc_path = parts[1]
+                doc_service = get_document_service()
+                if not doc_service.can_parse(doc_path):
+                    print(f"✗ 不支持的文档格式: {Path(doc_path).suffix}")
+                    print(f"支持格式: {doc_service.supported_formats()}")
+                else:
+                    # 解析文档
+                    try:
+                        content = doc_service.parse(doc_path)
+                        # 存储到会话元数据，供后续任务使用
+                        if "documents" not in session.metadata:
+                            session.metadata["documents"] = []
+                        session.metadata["documents"].append({
+                            "path": doc_path,
+                            "content": content,
+                        })
+                        print(f"✓ 已添加文档: {doc_path}")
+                        print(f"  长度: {len(content)} 字符")
+                        print(f"  预览: {content[:200]}..." if len(content) > 200 else f"  内容: {content}")
+                    except FileNotFoundError:
+                        print(f"✗ 文件不存在: {doc_path}")
+                    except Exception as e:
+                        print(f"✗ 解析失败: {e}")
+
         # === 后台任务指令 ===
         elif action == "/run":
             # 后台运行任务
@@ -437,10 +468,15 @@ async def run_interactive(
             else:
                 task_desc = " ".join(parts[1:])
                 jm = get_job_manager()
+                documents = session.metadata.get("documents", [])
 
                 # 创建后台任务
                 async def run_task():
-                    return await master.execute_task(task_desc, session_config=session.config)
+                    return await master.execute_task(
+                        task_desc,
+                        session_config=session.config,
+                        documents=documents,
+                    )
 
                 job_id = jm.submit_async_task(run_task(), name=task_desc[:50])
                 print(f"✓ 任务已提交: {job_id}")
@@ -531,7 +567,16 @@ async def run_interactive(
                 continue
 
             print("\n正在分解任务...")
-            report = await master.execute_task(task_input, session_config=session.config)
+            # 获取已添加的文档
+            documents = session.metadata.get("documents", [])
+            report = await master.execute_task(
+                task_input,
+                session_config=session.config,
+                documents=documents,
+            )
+            # 执行完成后清除文档（避免文档污染下次任务）
+            if documents:
+                session.metadata.pop("documents", None)
 
             # 追加到会话历史
             session.reports.append(report)
