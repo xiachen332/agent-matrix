@@ -8,6 +8,9 @@
 - **多角色 Agent**：Coder、Reviewer、Tester 分工协作
 - **依赖拓扑调度**：按依赖关系自动排序执行
 - **结果汇总**：整合各 Agent 输出生成最终报告
+- **多模型支持**：MiniMax / OpenAI / OpenRouter / DeepSeek / SiliconFlow / Claude
+- **多会话管理**：支持持久化会话，跨任务保持上下文
+- **真干活**：Coder 写文件、Tester 生成并运行 pytest
 
 ## 安装
 
@@ -21,22 +24,27 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
-## 配置
+## 快速开始
 
-需要设置 MiniMax API Key：
+### 环境变量配置
 
 ```bash
+# MiniMax（默认）
 export MINIMAX_API_KEY="your-api-key-here"
+
+# 或 OpenAI
+export OPENAI_API_KEY="your-api-key-here"
+
+# 或 OpenRouter
+export OPENROUTER_API_KEY="your-api-key-here"
 ```
-
-或直接在代码中传入。
-
-## 使用方法
 
 ### 单任务模式
 
 ```bash
-agent-matrix "实现一个计算器程序"
+agent-matrix "用 Python 写一个快速排序"
+agent-matrix "用 Python 写一个快速排序" --provider openai
+agent-matrix "用 Python 写一个快速排序" --markdown
 ```
 
 ### 交互模式
@@ -45,11 +53,33 @@ agent-matrix "实现一个计算器程序"
 agent-matrix
 ```
 
-### Markdown 格式输出
+进入后可用指令：
 
-```bash
-agent-matrix "实现一个排序算法" --markdown
 ```
+/session              # 列出所有会话
+/session new [name]   # 新建会话
+/session <id>        # 切换会话
+/session delete <id> # 删除会话
+/context             # 查看会话元数据
+/context clear       # 清空元数据
+/provider openai     # 切换 LLM 提供商
+/key <api_key>       # 设置 API Key
+/model gpt-4o        # 设置模型
+/output ./src         # 设置代码输出目录
+/config              # 显示当前配置
+/quit                # 退出（自动保存会话）
+```
+
+## 支持的模型提供商
+
+| 提供商 | 默认模型 | 说明 |
+|--------|---------|------|
+| `minimax` | MiniMax-M2 | 默认，国内可用 |
+| `openai` | GPT-4o-mini | OpenAI 官方 |
+| `openrouter` | Claude 3 Haiku | 支持 Claude/GPT/Llama 等 |
+| `deepseek` | deepseek-chat | 便宜 |
+| `siliconflow` | Qwen2.5-7B | 国内可用 |
+| `claude` | claude-sonnet-4 | Anthropic 官方 |
 
 ## 架构说明
 
@@ -64,22 +94,13 @@ agent-matrix "实现一个排序算法" --markdown
 ├─────────────────────────────────────────────────────────┤
 │                      Agent Pool                         │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐               │
-│  │  Coder   │  │ Reviewer │  │  Tester  │  ...         │
+│  │  Coder   │  │ Reviewer │  │  Tester  │               │
 │  └──────────┘  └──────────┘  └──────────┘               │
 ├─────────────────────────────────────────────────────────┤
-│                    LLM Adapter (MiniMax)                │
+│                    LLM Adapter                          │
+│         (MiniMax/OpenAI/OpenRouter/Claude...)           │
 └─────────────────────────────────────────────────────────┘
 ```
-
-### 核心模块
-
-| 模块 | 职责 |
-|------|------|
-| `TaskDecomposer` | 用 LLM 分析任务，拆解成子任务列表 |
-| `AgentPool` | 管理不同角色的 Agent 实例 |
-| `CollaborationEngine` | 解析依赖拓扑，执行调度 |
-| `ResultAggregator` | 汇总各 Agent 输出，生成最终报告 |
-| `LLMAdapter` | 封装 MiniMax API 调用 |
 
 ## 项目结构
 
@@ -94,20 +115,16 @@ agent-matrix/
 │       ├── engine.py           # 协作引擎
 │       ├── aggregator.py       # 结果汇总器
 │       ├── pool.py             # Agent 池
+│       ├── session.py          # 会话管理
 │       ├── agents/
-│       │   ├── __init__.py
 │       │   ├── base.py         # Agent 基类
 │       │   ├── coder.py        # Coder Agent
 │       │   ├── reviewer.py     # Reviewer Agent
 │       │   └── tester.py       # Tester Agent
 │       └── llm/
 │           ├── __init__.py
-│           └── minimax.py      # MiniMax API 适配器
+│           └── adapter.py      # 通用 LLM 适配器
 ├── tests/
-│   ├── __init__.py
-│   ├── test_decomposer.py
-│   ├── test_engine.py
-│   └── test_agents.py
 ├── pyproject.toml
 ├── SPEC.md
 └── README.md
